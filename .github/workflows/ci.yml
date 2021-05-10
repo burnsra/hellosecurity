@@ -13,8 +13,8 @@ on:
 
 env:
   APP_NAME: ${{ github.event.repository.name }}
-  DOCKER_REGISTRY: krogertechnologyprodusw-docker-local-dev.jfrog.io
-  DOCKER_TEST_REGISTRY: krogertechnologyprodusw-docker-local-test.jfrog.io
+  DOCKER_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
+  DOCKER_TEST_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
   DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
 
@@ -75,7 +75,8 @@ jobs:
       run: docker logout ${{ env.DOCKER_REGISTRY }}
 
   deploy:
-    name: continuous deploy
+    name: continuous deploy 
+    if: false
     needs: [test, build]
     runs-on: ubuntu-latest
     steps:
