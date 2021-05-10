@@ -10,6 +10,7 @@ on:
     - '.github/workflows/review*.yml'
     - '.github/workflows/version.yml'
     - '.github/containerscan/allowedlist.yaml'
+    - 'sonar-project.properties'
 
 env:
   APP_NAME: ${{ github.event.repository.name }}
@@ -162,5 +163,4 @@ jobs:
         deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
         
         
-
 
