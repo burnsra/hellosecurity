@@ -1,0 +1,3 @@
+[submodule ".github/actions/sonar-scanner"]
+	path = .github/actions/sonar-scanner
+	url = https://github.com/krogertechnology/sonar-scanner

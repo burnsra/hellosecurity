@@ -1,0 +1,78 @@
+name: output infrastructure plan to pull request 
+on:
+  pull_request:
+    branches:
+    - main
+    paths:
+    - "terraform/prod/**"
+    - "terraform/modules/**"
+    - '.github/workflows/plan.yml'
+    - '.github/workflows/provision-prod.yml'
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  DOCKER_REGISTRY: krogertechnologyprodusw-docker-local-prod.jfrog.io
+  DOCKER_IMAGE: krogertechnologyprodusw-docker-local-prod.jfrog.io/${{ github.event.repository.name }}/webapp:latest
+  ARM_CLIENT_ID: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_SP_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_SP_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: 45c9a658-02d1-4c1b-a2ec-0a38383c3259
+  ARM_TENANT_ID: 8331e14a-9134-4288-bf5a-5e2c8412f074
+  STATE_STORAGE_ACCOUNT: tsastatenonprod
+  STATE_CONTAINER: building-blocks-state
+  STATE_RESOURCE_GROUP: rg-tsa-state-nonprod
+  RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+
+jobs:
+  terraform_plan:
+    name: Terraform Plan
+    runs-on: [self-hosted, tsa]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 0.12.28
+        # terraform_wrapper: false
+    - name: Create tfvars
+      env:
+        APPLICATION_NAME: ${{ env.APP_NAME }}
+        DOCKER_REGISTRY: ${{ env.DOCKER_REGISTRY }}
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        envsubst < terraform/terraform.tfvars.template > terraform/prod/terraform.tfvars
+    - name: Terraform init
+      working-directory: ./terraform/prod
+      run: |
+        terraform init -input=false -backend-config=storage_account_name=${{ env.STATE_STORAGE_ACCOUNT }} \
+          -backend-config=container_name=${{ env.STATE_CONTAINER }} \
+          -backend-config=key=${{ env.APP_NAME }}.terraform.tfstate \
+          -backend-config=resource_group_name=${{ env.STATE_RESOURCE_GROUP }} \
+          -backend-config=subscription_id=${{ env.ARM_SUBSCRIPTION_ID }} \
+          -backend-config=tenant_id=${{ env.ARM_TENANT_ID }} \
+          -backend-config=client_id=${{ env.ARM_CLIENT_ID }} \
+          -backend-config=client_secret=${{ env.ARM_CLIENT_SECRET }}
+    - name: Terraform plan
+      working-directory: ./terraform/prod
+      run: |
+        terraform plan -no-color -out tfplan
+    - name: Capture plan
+      id: plan
+      working-directory: ./terraform/prod
+      run: |
+        terraform show -no-color tfplan
+    - name: Update PR
+      uses: actions/github-script@0.9.0
+      env:
+        STDOUT: "```terraform\n${{ steps.plan.outputs.stdout }}```"
+      with:
+        script: |
+            const output = `<details><summary>tf plan (nonprod):</summary>\n\n${process.env.STDOUT}\n\n</details>`;
+            const body = output.replace(/${{ secrets.DOCKER_PASSWORD }}/g, '***')
+
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            })

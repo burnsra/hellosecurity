@@ -1,0 +1,4 @@
+building_blocks:
+  java-spring-boot-caching:
+    ref: main
+    paths: .github/workflows/ci.yml

@@ -1,0 +1,144 @@
+name: continuous integration
+on: 
+  push:
+    paths:
+    - 'src/**'
+    - '**/pom.xml'
+    - 'Dockerfile*'
+    - '.github/workflows/ci.yml'
+    - '.github/workflows/release-deploy.yml'
+    - '.github/workflows/review*.yml'
+    - '.github/workflows/version.yml'
+    - '.github/containerscan/allowedlist.yaml'
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  DOCKER_REGISTRY: krogertechnologyprodusw-docker-local-dev.jfrog.io
+  DOCKER_TEST_REGISTRY: krogertechnologyprodusw-docker-local-test.jfrog.io
+  DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
+  RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+
+jobs:
+  test:
+    name: maven test, sonar scan
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Cache Maven dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+    - name: ✅ Unit test
+      run: mvn -B clean test
+    - name: ✅ Check file existence
+      id: sonarPropertiesCheck
+      uses: andstor/file-existence-action@v1
+      with:
+        files: "sonar-project.properties"
+    - name: ✅ Run Sonar code scan
+      if: steps.sonarPropertiesCheck.outputs.files_exists == 'true'
+      uses: ./.github/actions/sonar-scanner
+      with:
+        sonar-token: ${{ secrets.SONAR_TOKEN }}
+
+  build:
+    name: docker build, scan, and push
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Inject slug/short variables
+      uses: rlespinasse/github-slug-action@v2.x
+    - name: 🐳 Docker build
+      uses: docker/build-push-action@v1
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        repository: ${{ env.DOCKER_REPOSITORY }}
+        build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
+        tags: ${{ github.sha }},${{ env.GITHUB_REF_SLUG }},latest
+        add_git_labels: true
+        labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
+        cache_froms: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }},${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+        always_pull: true
+    - name: 🐳 Azure container scan 🔒
+      uses: azure/container-scan@v0
+      with:
+        image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+    - name: 🐳 Docker logout
+      if: always()
+      run: docker logout ${{ env.DOCKER_REGISTRY }}
+
+  deploy:
+    name: continuous deploy
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🔄 Set environment name variable (branch)
+      if: github.ref != 'refs/heads/main'
+      run: |
+          echo ::set-env name=ENVIRONMENT_NAME::dev
+          echo ::set-env name=SLOT_NAME::dev
+    - name: 🔄 Set environment name variable (main)
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tag')
+      run: |
+          echo ::set-env name=ENVIRONMENT_NAME::test
+          echo ::set-env name=SLOT_NAME::production
+    - id: create-deployment
+      uses: mormahr/deployment-action@transient_and_production_environment
+      name: 🔄 Create continuous deployment
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.sha }}
+        description: ${{ env.ENVIRONMENT_NAME }} deploy of @${{ github.sha }} with image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+        environment: ${{ env.ENVIRONMENT_NAME }}
+        initial_status: in_progress
+    - name: 🔄 Login via Azure CLI ☁️
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+    - name: 🔄 Create slot ☁️
+      if: env.SLOT_NAME != 'production'
+      run: az webapp deployment slot create --name ${{ env.APP_NAME }}-nonprod --slot ${{ env.SLOT_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }} --configuration-source ${{ env.APP_NAME }}-nonprod || true
+    - name: 🐳 Promote Docker image for deploy
+      uses: timperman/artifactory-promote-action@v1
+      with:
+        url: https://krogertechnologyprodusw.jfrog.io
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        sourceRepo: docker-local-dev
+        targetRepo: docker-local-test
+        dockerRepository: ${{ env.DOCKER_REPOSITORY }}
+        tag: ${{ github.sha }}
+        targetTag: ${{ github.sha }}
+    - id: deploy
+      name: 🔄 Deploy to App Service ☁️
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}-nonprod
+        images: ${{ env.DOCKER_TEST_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+        slot-name: ${{ env.ENVIRONMENT_NAME }}
+    - name: 🔄 Update deployment status (success)
+      if: success()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: success
+        deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
+        description: ${{ env.DOCKER_TEST_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+    - name: 🔄 Update deployment status (failure)
+      if: failure()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: failure
+        deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}

@@ -1,0 +1,197 @@
+name: create semantic version release
+
+on:
+  pull_request:
+    branches:
+    - main
+    types:
+    - closed
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  DOCKER_REGISTRY: krogertechnologyprodusw-docker-local-test.jfrog.io
+  DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
+  TEAMS_WEBHOOK_URL: https://outlook.office.com/webhook/01375c0b-8d48-44b9-87a9-4f07d3cb6050@8331e14a-9134-4288-bf5a-5e2c8412f074/IncomingWebhook/de14ce1f44974efbb951df7a015f4d3c/f2ca982d-7527-44f3-8766-8fe30111555f
+
+jobs:
+  create-draft-release:
+    name: automated semantic version draft release
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Create semver tag from PR labels
+      id: semver
+      uses: K-Phoen/semver-release-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        release_branch: main
+        release_strategy: none
+        tag_format: '%major%.%minor%.%patch%'
+
+    - uses: actions/checkout@v2
+      if: success() && steps.semver.outputs.tag
+      with:
+        ref: main
+    - name: Set up JDK 1.8
+      if: success() && steps.semver.outputs.tag
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Cache Maven dependencies
+      if: success() && steps.semver.outputs.tag
+      uses: actions/cache@v2
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+    - name: mvn version
+      if: success() && steps.semver.outputs.tag
+      run: mvn versions:set -DnewVersion=${{ steps.semver.outputs.tag }}
+    
+    - name: Commit pom.xml changes
+      uses: EndBug/add-and-commit@v4
+      if: success() && steps.semver.outputs.tag
+      with:
+        author_name: github-actions
+        author_email: 41898282+github-actions[bot]@users.noreply.github.com
+        message: 'automated versioning for merged PR (#${{ github.event.pull_request.number }})'
+        add: pom.xml
+        ref: main
+        tag: v${{ steps.semver.outputs.tag }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create release
+      id: create-release
+      uses: actions/create-release@v1
+      if: success() && steps.semver.outputs.tag
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.semver.outputs.tag }}
+        release_name: Release ${{ steps.semver.outputs.tag }}
+        body: |
+          automated versioning for merged PR (#${{ github.event.pull_request.number }}):
+          
+          ### ${{ github.event.pull_request.title }}
+
+          ${{ github.event.pull_request.body }}
+        draft: true # set draft and pre-release to false, use a personal access token secret as the GITHUB_TOKEN in this job's env, and continuously deploy to production!
+        prerelease: true
+
+    - name: 🐳 Docker tagged build and push
+      uses: docker/build-push-action@v1
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        repository: ${{ env.DOCKER_REPOSITORY }}
+        build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
+        tags: v${{ steps.semver.outputs.tag }},latest
+        add_git_labels: true
+        labels: org.opencontainers.image.version=v${{ steps.semver.outputs.tag }}
+        always_pull: true
+    - name: 🐳 Azure container scan 🔒
+      uses: azure/container-scan@v0
+      with:
+        image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:v${{ steps.semver.outputs.tag }}
+    - name: 🐳 Docker logout
+      if: always()
+      run: docker logout ${{ env.DOCKER_REGISTRY }}
+
+    - id: create-deployment
+      uses: mormahr/deployment-action@transient_and_production_environment
+      name: 🔄 Create continuous test deployment
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.sha }}
+        description: test deploy of @${{ github.sha }} with image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:v${{ steps.semver.outputs.tag }}
+        environment: test
+        initial_status: in_progress
+    - name: 🔄 Login via Azure CLI ☁️
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+    - id: deploy
+      name: 🔄 Deploy to App Service ☁️
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}-nonprod
+        images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:v${{ steps.semver.outputs.tag }}
+    - name: 🔄 Update deployment status (success)
+      if: success()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: success
+        deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
+        description: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:v${{ steps.semver.outputs.tag }}
+    - name: 🔄 Update deployment status (failure)
+      if: failure()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: failure
+        deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
+
+    - name: Export release edit URL
+      if: steps.create-release.outputs.html_url
+      run: echo ::set-env name=RELEASE_EDIT_URL::$(echo "${{ steps.create-release.outputs.html_url }}" | sed 's/\/tag\//\/edit\//g')
+    - name: Notify Microsoft Teams of draft release
+      uses: fjogeleit/http-request-action@v1.4.1
+      if: steps.create-release.outputs.html_url
+      with:
+        url: ${{ env.TEAMS_WEBHOOK_URL }}
+        method: POST
+        data: |
+          {
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "summary": "${{ github.event.repository.name }} v${{ steps.semver.outputs.tag }} draft release",
+            "sections": [
+              {
+                "facts": [
+                  {
+                    "name": "Repository",
+                    "value": "[${{ github.repository }}](${{ github.event.repository.html_url }})"
+                  },
+                  {
+                    "name": "Draft release",
+                    "value": "[Release v${{ steps.semver.outputs.tag }}](${{ steps.create-release.outputs.html_url }})"
+                  },
+                  {
+                    "name": "[test](${{ github.event.repository.html_url }}/deployments/activity_log?environment=test) deployment",
+                    "value": "[${{ steps.deploy.outputs.webapp-url }}](${{ steps.deploy.outputs.webapp-url }})"
+                  },
+                  {
+                    "name": "Docker image artifact",
+                    "value": "[`${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:v${{ steps.semver.outputs.tag }}`](${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }})"
+                  },
+                  {
+                    "name": "Pull request",
+                    "value": "[${{ github.event.pull_request.title }}](${{ github.event.pull_request.html_url }})"
+                  }
+                ],
+                "potentialAction": [
+                  {
+                    "@type": "ActionCard",
+                    "name": "Publish Release",
+                    "actions": [
+                      {
+                        "@type": "OpenUri",
+                        "name": "Edit in GitHub to Publish",
+                        "targets": [
+                          { "os": "default", "uri": "${{ env.RELEASE_EDIT_URL }}" }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "markdown": true
+              }
+            ]
+          }

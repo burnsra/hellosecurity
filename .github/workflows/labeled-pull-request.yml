@@ -1,0 +1,60 @@
+name: generate feedback on labeled pull requests 
+on:
+  pull_request:
+    branches:
+    - main
+    types:
+    - labeled
+    - unlabeled
+
+jobs:
+  preview-versioning:
+    name: Preview automated versioning
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Create semver tag from PR labels
+      id: semver
+      uses: timperman/semver-release-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        release_branch: main
+        release_strategy: none
+        tag_format: '%major%.%minor%.%patch%'
+    - name: Comment on PR with generated versioning
+      uses: actions/github-script@0.9.0
+      with:
+        script: |
+            const { owner, repo } = context.repo
+            const issue_number = context.issue.number
+            const tag = '${{ steps.semver.outputs.tag }}'
+            const text = (tag !== '')
+              ? `GitHub Actions will create a \`v${tag}\` release when this pull request is merged`
+              : '**N/A** - consider adding a `major`, `minor`, or `patch` label for automated [semantic versioning](https://semver.org)'
+            const body = `### Automated Versioning\n${text}`
+
+            const comments = await github.issues.listComments({
+              issue_number,
+              owner,
+              repo
+            })
+            const comment = comments.data.find(comment => comment.user.login === 'github-actions[bot]' && comment.body.startsWith('### Automated Versioning'))
+            if (comment) {
+              console.log(`updating comment ${comment.id}: ${body}`)
+              await github.issues.updateComment({
+                owner,
+                repo,
+                comment_id: comment.id,
+                body
+              })
+            }
+            else {
+              console.log(`creating comment on #${issue_number}: ${body}`)
+              await github.issues.createComment({
+                issue_number,
+                owner,
+                repo,
+                body
+              })
+            }

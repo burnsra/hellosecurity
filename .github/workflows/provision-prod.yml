@@ -1,0 +1,59 @@
+name: provision production infrastructure
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - 'terraform/prod/**'
+    - 'terraform/modules/**'
+    - '.github/workflows/provision-prod.yml'
+  workflow_dispatch:
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  ARM_CLIENT_ID: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_SP_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_SP_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: 45c9a658-02d1-4c1b-a2ec-0a38383c3259
+  ARM_TENANT_ID: 8331e14a-9134-4288-bf5a-5e2c8412f074
+  STATE_STORAGE_ACCOUNT: tsastatenonprod
+  STATE_CONTAINER: building-blocks-state
+  STATE_RESOURCE_GROUP: rg-tsa-state-nonprod
+  RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+  DOCKER_REGISTRY: krogertechnologyprodusw-docker-local-prod.jfrog.io
+  DOCKER_IMAGE: krogertechnologyprodusw-docker-local-prod.jfrog.io/${{ github.event.repository.name }}/webapp:latest
+      
+jobs:
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: self-hosted
+    steps:
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 0.12.28
+          terraform_wrapper: false
+      - uses: actions/checkout@v2
+      - name: Create tfvars
+        env:
+          APPLICATION_NAME: ${{ env.APP_NAME }}
+          DOCKER_REGISTRY: ${{ env.DOCKER_REGISTRY }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          envsubst < terraform/terraform.tfvars.template > terraform/prod/terraform.tfvars
+      - name: Terraform plan and apply
+        working-directory: ./terraform/prod
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+        run: |
+          terraform init -input=false \
+            -backend-config=storage_account_name=${{ env.STATE_STORAGE_ACCOUNT }} \
+            -backend-config=container_name=${{ env.STATE_CONTAINER }} \
+            -backend-config=key=${{ env.APP_NAME }}.terraform.tfstate \
+            -backend-config=resource_group_name=${{ env.STATE_RESOURCE_GROUP }} \
+            -backend-config=subscription_id=${{ env.ARM_SUBSCRIPTION_ID }} \
+            -backend-config=tenant_id=${{ env.ARM_TENANT_ID }} \
+            -backend-config=client_id=${{ env.ARM_CLIENT_ID }} \
+            -backend-config=client_secret=${{ env.ARM_CLIENT_SECRET }}
+          terraform plan -out tfplan
+          terraform apply -auto-approve tfplan

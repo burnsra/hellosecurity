@@ -1,0 +1,43 @@
+name: clean up review app environment
+on:
+  pull_request:
+    types: [closed]
+    paths:
+    - 'src/**'
+    - 'Dockerfile'
+    - '.github/workflows/ci.yml'
+    - '.github/workflows/review.yml'
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+
+jobs:
+  swap-slot:
+    name: Delete review environment slot
+    runs-on: ubuntu-latest
+    steps:
+    - name: Update GitHub deployment to inactive state
+      uses: actions/github-script@v3
+      with:
+        script: |
+            const deployments = await github.repos.listDeployments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment: `review-pr-${{ github.event.pull_request.number }}`,
+              per_page: 1
+            })
+            if (deployments.data && Array.isArray(deployments.data)) {
+              await github.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deployments.data[0].id,
+                state: 'inactive'
+              })
+            }
+    - name: 🔄 Login via Azure CLI ☁️
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+    - name: 🔄 Delete slot ☁️
+      run: az webapp deployment slot delete --name ${{ env.APP_NAME }}-nonprod --slot review-pr-${{ github.event.pull_request.number }} --resource-group ${{ env.RESOURCE_GROUP_NAME }}

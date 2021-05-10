@@ -1,0 +1,6 @@
+application_name         = "${APPLICATION_NAME}"
+resource_group_name      = "${RESOURCE_GROUP_NAME}"
+docker_image             = "${DOCKER_IMAGE}"
+docker_registry          = "${DOCKER_REGISTRY}"
+docker_registry_username = "${DOCKER_USERNAME}"
+docker_registry_password = "${DOCKER_PASSWORD}"

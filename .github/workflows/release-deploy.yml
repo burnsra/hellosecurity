@@ -1,0 +1,180 @@
+name: deploy releases for staging to production
+on:
+  release:
+    types: [published, released]
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  DOCKER_REGISTRY: krogertechnologyprodusw-docker-local-prod.jfrog.io
+  DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
+  RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+    
+jobs:
+  promote:
+    name: promote docker image for release
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+    - name: Promote Docker artifact
+      uses: timperman/artifactory-promote-action@v1
+      with:
+        url: https://krogertechnologyprodusw.jfrog.io
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        sourceRepo: docker-local-test
+        targetRepo: docker-local-prod
+        dockerRepository: ${{ env.DOCKER_REPOSITORY }}
+        tag: ${{ github.event.release.tag_name }}
+        targetTag: ${{ github.event.release.tag_name }}
+    - uses: actions/checkout@v2
+      if: failure() # re-build as backup if promote fails
+    - name: 🐳 Docker tagged build and push
+      if: failure() # re-build as backup if promote fails
+      uses: docker/build-push-action@v1
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        repository: ${{ env.DOCKER_REPOSITORY }}
+        build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
+        tags: ${{ github.event.release.tag_name }}
+        add_git_labels: true
+        labels: org.opencontainers.image.version=${{ github.event.release.tag_name }}
+        always_pull: true
+    - name: 🐳 Docker logout
+      if: always()
+      run: docker logout ${{ env.DOCKER_REGISTRY }}
+
+  release-deploy:
+    name: continuous release deploy
+    needs: [promote]
+    runs-on: ubuntu-latest
+    outputs:
+      slot: ${{ steps.create_release_slot.outputs.slot }}
+    steps:
+    - name: Inject slug/short variables
+      uses: rlespinasse/github-slug-action@v2.x
+    - name: 🔄 Create release ${{ github.event.release.tag_name }} deployment
+      id: create_deployment
+      uses: chrnorm/deployment-action@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        environment: ${{ env.GITHUB_REF_SLUG_URL }}
+        initial_status: in_progress
+        description: Release ${{ github.event.release.tag_name }} with image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+        ref: ${{ github.ref }}
+    - name: 🔄 Create staging deployment
+      id: create_staging_deployment
+      uses: mormahr/deployment-action@transient_and_production_environment
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        environment: staging
+        initial_status: in_progress
+        description: Staging deploy of release ${{ github.event.release.tag_name }} with image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+        ref: ${{ github.ref }}
+    - name: 🔄 Login via Azure CLI ☁️
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+    - name: 🔄 Create ${{ github.event.release.tag_name }} slot ☁️
+      id: create_release_slot
+      run: |
+          az webapp deployment slot create --name ${{ env.APP_NAME }} --slot ${{ env.GITHUB_REF_SLUG_URL }} --resource-group ${{ env.RESOURCE_GROUP_NAME }} --configuration-source ${{ env.APP_NAME }} || true
+          echo ::set-output name=slot::${{ env.GITHUB_REF_SLUG_URL }}
+    - name: 🔄 Deploy to App Service ☁️
+      id: deploy
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}
+        images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+        slot-name: ${{ env.GITHUB_REF_SLUG_URL }}
+    - name: 🔄 Update deployment status (success)
+      if: success()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: success
+        deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
+        description: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+    - name: 🔄 Update deployment status (failure)
+      if: failure()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: failure
+        deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
+    - name: 🔄 Create staging slot ☁️
+      run: az webapp deployment slot create --name ${{ env.APP_NAME }} --slot staging --resource-group ${{ env.RESOURCE_GROUP_NAME }} --configuration-source ${{ env.APP_NAME }} || true
+    - id: staging_deploy
+      name: 🔄 Deploy to App Service staging slot ☁️
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}
+        images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+        slot-name: staging
+    - name: 🔄 Update staging deployment status (success)
+      if: success()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.staging_deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.staging_deploy.outputs.webapp-url }}
+        state: success
+        deployment_id: ${{ steps.create_staging_deployment.outputs.deployment_id }}
+        description: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+    - name: 🔄 Update staging deployment status (failure)
+      if: failure()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.staging_deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.staging_deploy.outputs.webapp-url }}
+        state: failure
+        deployment_id: ${{ steps.create_staging_deployment.outputs.deployment_id }}
+
+  production-release-deploy:
+    name: continuous production release
+    if: '!github.event.release.prerelease'
+    needs: [release-deploy]
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🔄 Create production deployment
+      id: create_deployment
+      uses: mormahr/deployment-action@transient_and_production_environment
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        environment: production
+        environment_url: https://${{ env.APP_NAME }}.azurewebsites.net
+        initial_status: in_progress
+        description: Production deploy of release ${{ github.event.release.tag_name }} with image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+        ref: ${{ github.ref }}
+    - name: 🔄 Login via Azure CLI ☁️
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+    - name: 🔄 Swap release slot with production ☁️
+      run: az webapp deployment slot swap --name ${{ env.APP_NAME }} --slot ${{ needs.release-deploy.outputs.slot }} --resource-group ${{ env.RESOURCE_GROUP_NAME }}
+    - name: 🔄 Update deployment status (success)
+      if: success()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: https://${{ env.APP_NAME }}.azurewebsites.net
+        environment_url: https://${{ env.APP_NAME }}.azurewebsites.net
+        state: success
+        deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
+        description: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.release.tag_name }}
+    - name: 🔄 Update deployment status (failure)
+      if: failure()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: https://${{ env.APP_NAME }}.azurewebsites.net
+        environment_url: https://${{ env.APP_NAME }}.azurewebsites.net
+        state: failure
+        deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
+          

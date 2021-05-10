@@ -1,0 +1,67 @@
+name: deploy specific release to nonprod environment
+on: 
+  workflow_dispatch:
+    inputs:
+      registry:
+        description: 'Docker registry'     
+        required: true
+        default: 'krogertechnologyprodusw-docker-local-dev.jfrog.io'
+      slot:
+        description: 'App service slot name'     
+        required: true
+        default: 'dev'
+      tag:
+        description: 'Docker tag to deploy'     
+        required: true
+        default: 'latest'
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
+  RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+    
+jobs:
+  manual-deploy:
+    name: deploy specific tag to nonprod slot
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🔄 Create deployment
+      id: create_deployment
+      uses: chrnorm/deployment-action@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        environment: ${{ github.event.inputs.slot }}
+        initial_status: in_progress
+        description: Deploy to slot ${{ github.event.inputs.slot }} with image ${{ github.event.inputs.registry }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.tag }}
+    - name: 🔄 Login via Azure CLI ☁️
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+    - name: 🔄 Create slot ☁️
+      run: az webapp deployment slot create --name ${{ env.APP_NAME }}-nonprod --slot ${{ github.event.inputs.slot }} --resource-group ${{ env.RESOURCE_GROUP_NAME }} --configuration-source ${{ env.APP_NAME }}-nonprod || true
+    - id: deploy
+      name: 🔄 Deploy to App Service ☁️
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}-nonprod
+        images: ${{ github.event.inputs.registry }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.tag }}
+        slot-name: ${{ github.event.inputs.slot }}
+    - name: 🔄 Update deployment status (success)
+      if: success()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: success
+        deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
+        description: ${{ github.event.inputs.registry }}/${{ env.DOCKER_REPOSITORY }}:${{ github.event.inputs.tag }}
+    - name: 🔄 Update deployment status (failure)
+      if: failure()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: failure
+        deployment_id: ${{ steps.create_deployment.outputs.deployment_id }}
