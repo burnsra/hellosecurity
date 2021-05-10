@@ -15,7 +15,7 @@ env:
   APP_NAME: ${{ github.event.repository.name }}
   DOCKER_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
   DOCKER_TEST_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
-  DOCKER_REGISTRY_REMOTE: krogertechnology-docker-remote.jfrog.io
+  DOCKER_REGISTRY_REMOTE: krogertechnology-docker.jfrog.io
   DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
 
