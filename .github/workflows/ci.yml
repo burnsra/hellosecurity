@@ -48,7 +48,7 @@ jobs:
         sonar-token: ${{ secrets.SONAR_TOKEN }}
     - name: ✅ Run Sonar Scan Warning
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
-      run: "echo '::warning:: Please add sonar-project-properties see here for details'"
+      run: "echo '::warning:: Please add sonar-project.properties see here for details'"
       
   build:
     name: docker build, scan, and push
@@ -156,3 +156,4 @@ jobs:
         deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
         
         
+
