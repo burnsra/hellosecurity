@@ -15,6 +15,7 @@ env:
   APP_NAME: ${{ github.event.repository.name }}
   DOCKER_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
   DOCKER_TEST_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
+  DOCKER_REGISTRY_REMOTE: krogertechnology-docker-remote.jfrog.io
   DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
 
@@ -52,14 +53,20 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v2.x
+      uses: rlespinasse/github-slug-action@v2.x 
+    - name: docker login
+      uses: docker/login-action@v1
+      with: 
+        registry: ${{ env.DOCKER_REGISTRY_REMOTE }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
     - name: 🐳 Docker build
       uses: docker/build-push-action@v1
       with:
-        registry: ${{ env.DOCKER_REGISTRY }}
+        registry: ${{ env.DOCKER_REGISTRY }}      
+        repository: ${{ env.DOCKER_REPOSITORY }}
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-        repository: ${{ env.DOCKER_REPOSITORY }}
         #build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
         tags: ${{ github.sha }},${{ env.GITHUB_REF_SLUG }},latest
         add_git_labels: true
