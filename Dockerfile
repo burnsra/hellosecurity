@@ -1,4 +1,4 @@
-ARG baseRegistry=krogertechnologyprodusw-docker-local-dev.jfrog.io
+ARG baseRegistry=krogertechnology-docker-remote.jfrog.io
 FROM maven:3.6.3-openjdk-8 AS builder
 WORKDIR /app
 COPY pom.xml ./pom.xml
