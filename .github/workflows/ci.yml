@@ -76,6 +76,7 @@ jobs:
       #labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
     - name: 🐳 Azure container scan 🔒
       uses: azure/container-scan@v0
+      continue-on-error: true
       with:
         image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
     - name: Docker push
