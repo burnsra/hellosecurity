@@ -66,24 +66,21 @@ jobs:
         registry: ${{ env.DOCKER_REGISTRY }}
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
-    - name: 🐳 Docker build
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        pull: true
-        push: true
-        tags: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }},${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:latest,${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
-        
+    - name: Docker build
+      run: |
+        docker build . --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} \
+          --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:latest \
+          --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+    
         #build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
-        labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
+      #labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
     - name: 🐳 Azure container scan 🔒
       uses: azure/container-scan@v0
       with:
         image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
-    - name: 🐳 Docker logout
-      if: always()
-      run: docker logout ${{ env.DOCKER_REGISTRY }}
-
+    - name: Docker push
+      run: |
+        docker push  ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}
   deploy:
     name: continuous deploy 
     if: false
