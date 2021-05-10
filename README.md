@@ -32,6 +32,7 @@ This template repository composes [building blocks](https://github.com/krogertec
 - [Building Blocks](#building-blocks)
 - [References](#references)
 
+
 ## Development Workflow
 
 You can tweak this template to fit any unique needs, but it makes a few assumptions including generally-recommended development workflow best practices including:
