@@ -60,7 +60,7 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
         repository: ${{ env.DOCKER_REPOSITORY }}
-        build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
+        #build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
         tags: ${{ github.sha }},${{ env.GITHUB_REF_SLUG }},latest
         add_git_labels: true
         labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
