@@ -118,16 +118,14 @@ jobs:
       with:
         image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
 
-
     - name: Docker push
       run: |
-        buildnumber="${{github.run_number}}-$RANDOM"
+        buildnumber="${{github.run_id}}-$RANDOM"
         jfrog rt docker-push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} ${{env.REPO}} --build-name=${{github.repository}} --build-number=$buildnumber
         echo "buildnumber=$buildnumber" >> $GITHUB_ENV
-      #docker push  ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}
-      
-      
-    - name: Xray Scan 
+
+    - name: ✨ Xray Scan 
+      timeout-minutes: 10
       run: |
         jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
         jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=true
