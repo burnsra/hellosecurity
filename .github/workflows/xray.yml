@@ -129,7 +129,7 @@ jobs:
     - name: Xray Scan 
       run: |
         jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
-        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}}
+        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=true
         
   deploy:
     name: continuous deploy 
