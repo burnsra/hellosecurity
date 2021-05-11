@@ -2,21 +2,24 @@ package com.kroger.example;
 
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestMapping;
-import javax.servlet.http;
+//import javax.servlet.http;
 
 @RestController
 public class HelloController {
 	
-	protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+	String s = null;
+	
+	protected void doGet() {
 	try {
-		doSomeWork();
+		//doSomeWork();
+		System.out.println(s.toString());
 	} catch (NullPointerException ex) {
 		// BAD: printing a stack trace back to the response
-		ex.printStackTrace(response.getWriter());
+		ex.printStackTrace();
 		return;
 	}
 
-	try {
+	/*try {
 		doSomeWork();
 	} catch (NullPointerException ex) {
 		// GOOD: log the stack trace, and send back a non-revealing response
@@ -25,19 +28,19 @@ public class HelloController {
 			HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
 			"Exception occurred");
 		return;
-	}
+	}*/
 }
 
 	@RequestMapping("/")
 	public String index() {
-		
-		try {
+		doGet();
+		/*try {
 //doSomeWork();
 } catch (NullPointerException ex) {
 // BAD: printing a stack trace back to the response
 ex.printStackTrace();
 return;
-}
+}*/
 		return "Greetings from Spring Boot!";
 	}
 	
