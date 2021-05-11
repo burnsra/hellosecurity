@@ -113,7 +113,7 @@ jobs:
       
     - name: Configure JFrog CLI  
       run: |
-        jfrog rt config --server-id art-saas --url ${{ env.JFROG_SAAS_URL }} --user ${{secrets.DOCKER_USERNAME}} --password '${{secrets.DOCKER_PASSWORD}}' --interactive=false
+        jfrog rt config --url ${{ env.JFROG_SAAS_URL }} --user ${{secrets.DOCKER_USERNAME}} --password '${{secrets.DOCKER_PASSWORD}}' --interactive=false
 
     - name: Docker push
       run: |
