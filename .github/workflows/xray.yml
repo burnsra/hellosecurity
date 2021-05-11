@@ -19,6 +19,8 @@ env:
   DOCKER_REGISTRY_REMOTE: krogertechnology-docker.jfrog.io
   DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+  JFROG_SAAS_URL: krogertechnology.jfrog.io/artifactory
+  REPO: kroger-fast-track-docker-local
 
 jobs:
   test:
@@ -95,6 +97,7 @@ jobs:
         docker build . --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} \
           --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:latest \
           --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+          
     
         #build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
       #labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
@@ -103,9 +106,27 @@ jobs:
       continue-on-error: true
       with:
         image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+        
+    - name: Installing JFrog CLI   
+      uses: jfrog/setup-jfrog-cli@v1
+      
+    - name: Configure JFrog CLI  
+      run: |
+        jfrog rt config --server-id art-saas --url ${{ env.JFROG_SAAS_URL }} --user ${{secrets.DOCKER_USERNAME}} --password '${{secrets.DOCKER_PASSWORD}}' --interactive=false
+
     - name: Docker push
       run: |
-        docker push  ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}
+        buildnumber="${{github.run_number}}-$RANDOM"
+        jfrog rt docker-push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} ${{env.REPO}} --build-name ${{github.repository}} --build-number $buildnumber
+        echo "buildnumber=$buildnumber" >> $GITHUB_ENV
+      #docker push  ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}
+      
+      
+    - name: Xray Scan 
+      run: |
+        jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
+        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}}
+        
   deploy:
     name: continuous deploy 
     if: false
