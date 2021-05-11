@@ -1,4 +1,4 @@
-name: continuous integration
+name: Xray continuous integration
 on: 
   push:
     paths:
@@ -6,11 +6,13 @@ on:
     - '**/pom.xml'
     - 'Dockerfile*'
     - '.github/workflows/ci.yml'
+    - '.github/workflows/xray.yml'
     - '.github/workflows/release-deploy.yml'
     - '.github/workflows/review*.yml'
     - '.github/workflows/version.yml'
     - '.github/containerscan/allowedlist.yaml'
     - 'sonar-project.properties'
+
 
 env:
   APP_NAME: ${{ github.event.repository.name }}
@@ -19,6 +21,8 @@ env:
   DOCKER_REGISTRY_REMOTE: krogertechnology-docker.jfrog.io
   DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+  JFROG_SAAS_URL: https://krogertechnology.jfrog.io
+  REPO: kroger-fast-track-docker-local
 
 jobs:
   test:
@@ -90,22 +94,42 @@ jobs:
         registry: ${{ env.DOCKER_REGISTRY }}
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Installing JFrog CLI   
+      uses: jfrog/setup-jfrog-cli@v1
+      
+    - name: Configure JFrog CLI  
+      run: |
+        jfrog config add --url=${{ env.JFROG_SAAS_URL }} --user=${{secrets.DOCKER_USERNAME}} --password='${{secrets.DOCKER_PASSWORD}}' --interactive=false
+        
     - name: Docker build
       run: |
         docker build . --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} \
           --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:latest \
           --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+          
     
         #build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
       #labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
     - name: 🐳 Azure container scan 🔒
+      if: false
       uses: azure/container-scan@v0
       continue-on-error: true
       with:
         image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+
     - name: Docker push
       run: |
-        docker push  ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}
+        buildnumber="${{github.run_id}}-$RANDOM"
+        jfrog rt docker-push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} ${{env.REPO}} --build-name=${{github.repository}} --build-number=$buildnumber
+        echo "buildnumber=$buildnumber" >> $GITHUB_ENV
+
+    - name: ✨ Xray Scan 
+      timeout-minutes: 10
+      run: |
+        jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
+        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=true
+        
   deploy:
     name: continuous deploy 
     if: false
@@ -176,5 +200,3 @@ jobs:
         state: failure
         deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
         
-        
-
