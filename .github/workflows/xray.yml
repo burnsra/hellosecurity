@@ -20,7 +20,7 @@ env:
   DOCKER_REGISTRY_REMOTE: krogertechnology-docker.jfrog.io
   DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
-  JFROG_SAAS_URL: https://krogertechnology.jfrog.io/artifactory
+  JFROG_SAAS_URL: https://krogertechnology.jfrog.io
   REPO: kroger-fast-track-docker-local
 
 jobs:
