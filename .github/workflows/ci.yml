@@ -57,6 +57,20 @@ jobs:
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
       run: "echo '::warning:: Please add sonar-project.properties see here for details'"
       
+      
+    - uses: tspascoal/fail-workflow-on-alerts-action@v0
+      #id: alerts
+      with:
+        max_errors: 0 # optional. Skip or -1 to ignore alerts
+        max_warnings: 0 # optional. Skip or -1 to ignore alerts
+        max_notes: 0 # optional. Skip or -1 to ignore alerts
+
+#- run: |
+ #   echo number errors ${{ steps.alerts.outputs.error }}
+  #  echo number warnings ${{ steps.alerts.outputs.warning }}
+   # echo number notes ${{ steps.alerts.outputs.note }}
+
+      
   build:
     name: docker build, scan, and push
     runs-on: ubuntu-latest
