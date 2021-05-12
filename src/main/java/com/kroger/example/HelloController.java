@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class HelloController {
 	private String password="SuperSpecialAisle7";
 	private String token="TheF5KeyIsSoRefreshing";
+	private String pat_token="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";
 	String s = null;
 	
 	protected void doGet() {
