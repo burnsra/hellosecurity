@@ -63,7 +63,7 @@ jobs:
     - name: ✅ Notify Developer
       run:  |
         reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
-        echo "::info:: Please review your results at http://sonar.kroger.com/sonar/dashboard/index/$reponame"
+        echo "::warning:: Please review your results at http://sonar.kroger.com/sonar/dashboard/index/$reponame"
       
     - uses: tspascoal/fail-workflow-on-alerts-action@v0
       #id: alerts
@@ -136,7 +136,7 @@ jobs:
     - name: ✅ Notify Developer of XRay Build Dashboard
       run:  |
         reponame=$(echo ${{github.REPOSITORY}} | sed 's/\//%2F/')
-        echo "::info:: Please review your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
+        echo "::warning:: Please review your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
         
   deploy:
     name: continuous deploy 
