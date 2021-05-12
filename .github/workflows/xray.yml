@@ -65,13 +65,6 @@ jobs:
         reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
         echo "::warning:: Please review your results at http://sonar.kroger.com/sonar/dashboard/index/$reponame"
       
-    - uses: tspascoal/fail-workflow-on-alerts-action@v0
-      #id: alerts
-      with:
-        max_errors: 0 # optional. Skip or -1 to ignore alerts
-        max_warnings: 0 # optional. Skip or -1 to ignore alerts
-        max_notes: 0 # optional. Skip or -1 to ignore alerts
-
 #- run: |
  #   echo number errors ${{ steps.alerts.outputs.error }}
   #  echo number warnings ${{ steps.alerts.outputs.warning }}
@@ -110,7 +103,6 @@ jobs:
         docker build . --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} \
           --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:latest \
           --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
-          
     
         #build_args: baseRegistry=${{ env.DOCKER_REGISTRY }}
       #labels: org.opencontainers.image.version=${{ env.GITHUB_REF_SLUG }}
