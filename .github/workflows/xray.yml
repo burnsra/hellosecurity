@@ -128,7 +128,7 @@ jobs:
       timeout-minutes: 10
       run: |
         jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
-        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=true
+        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=false
         
   deploy:
     name: continuous deploy 
