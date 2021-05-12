@@ -51,7 +51,7 @@ jobs:
       uses: andstor/file-existence-action@v1
       with:
         files: "sonar-project.properties"
-    - name: ✅ Warn If Missing Config
+    - name: 🔔 Warn If Missing Config
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
       run: "echo '::warning:: Please add sonar-project.properties. Details can be found at https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/'"
     - name: 🔍 Run SonarQube Scan
@@ -60,16 +60,10 @@ jobs:
       continue-on-error: true
       with:
         sonar-token: ${{ secrets.SONAR_TOKEN }}
-    - name: 🔔 Notify Developer of SonarQube Report (success)
-      if: ${{ success() }}
+    - name: 🔔 Notify of SonarQube Report (success)
       run:  |
         reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
-        echo "::warning:: Your scan is complete. How did you do? Find your results at http://sonar.kroger.com/sonar/dashboard/index$reponame"
-    - name: 🔔 Notify Developer of SonarQube Report (failure)
-      if: ${{ failure() }}
-      run:  |
-        reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
-        echo "::error:: It seems you have not passed your quality gate. Details can be found at http://sonar.kroger.com/sonar/dashboard/index$reponame"
+        echo "::warning:: Your SonarQube code scan is complete. How did you do? Find your results at http://sonar.kroger.com/sonar/dashboard/index$reponame"
       
   build:
     name: docker build, scan, and push
@@ -128,7 +122,7 @@ jobs:
     - name: 🔔 Notify Developer of XRay Report
       run:  |
         reponame=$(echo ${{github.REPOSITORY}} | sed 's/\//%2F/')
-        echo "::warning:: Your results are complete. How did you do? Find your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
+        echo "::warning:: Your XRay security scan has been initiated. Find your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
         
   deploy:
     name: continuous deploy 
