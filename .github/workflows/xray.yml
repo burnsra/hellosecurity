@@ -60,7 +60,10 @@ jobs:
     - name: ✅ Run Sonar Scan Warning
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
       run: "echo '::warning:: Please add sonar-project.properties see here for details'"
-      
+    - name: ✅ Notify Developer
+      run:  |
+        reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}\//')
+        echo "::info:: Please review your results at http://sonar.kroger.com/sonar/dashboard/index/$reponame"
       
     - uses: tspascoal/fail-workflow-on-alerts-action@v0
       #id: alerts
@@ -129,6 +132,11 @@ jobs:
       run: |
         jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
         jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=false
+        
+    - name: ✅ Notify Developer of XRay Build Dashboard
+      run:  |
+        reponame=$(echo ${{github.REPOSITORY}} | sed 's/\//%2F/')
+        echo "::info:: Please review your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
         
   deploy:
     name: continuous deploy 
