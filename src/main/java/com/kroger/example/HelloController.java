@@ -8,7 +8,7 @@ import javax.servlet.http.HttpServletResponse;
 public class HelloController {
 	// Should trigger passwords in SonarQube
 	private String password="SuperSpecialAisle7";
-	private String token="TheF5KeyIsSoRefreshing";
+	String pwd="TheF5KeyIsSoRefreshing";
 	// Should trigger Github PAT in Github Advanced Security - Secret Scanning
 	private String pat_token="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";
 
@@ -22,6 +22,9 @@ public class HelloController {
 	@RequestMapping("/hello")
 	public String helloWorld(HttpServletResponse response) throws Exception  {
 		try {
+			if(this.password.equals(pwd)) {
+				this.password = "Something Else";
+			}
 			String temp = "blah";
 			System.out.println(temp.toString());
 		} catch (NullPointerException ex) {
