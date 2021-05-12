@@ -13,7 +13,6 @@ on:
     - '.github/containerscan/allowedlist.yaml'
     - 'sonar-project.properties'
 
-
 env:
   APP_NAME: ${{ github.event.repository.name }}
   DOCKER_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
