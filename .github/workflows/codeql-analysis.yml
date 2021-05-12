@@ -71,3 +71,11 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
+      
+    - name: Fail workflow if open alerts exceed threshold
+      uses: tspascoal/fail-workflow-on-alerts-action@v0
+      #id: alerts
+      with:
+        max_errors: 0 # optional. Skip or -1 to ignore alerts
+        max_warnings: 0 # optional. Skip or -1 to ignore alerts
+        max_notes: 0 # optional. Skip or -1 to ignore alerts
