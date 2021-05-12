@@ -62,7 +62,7 @@ jobs:
       run: "echo '::warning:: Please add sonar-project.properties see here for details'"
     - name: ✅ Notify Developer
       run:  |
-        reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}\//')
+        reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
         echo "::info:: Please review your results at http://sonar.kroger.com/sonar/dashboard/index/$reponame"
       
     - uses: tspascoal/fail-workflow-on-alerts-action@v0
