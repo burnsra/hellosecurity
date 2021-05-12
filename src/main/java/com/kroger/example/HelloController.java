@@ -2,14 +2,14 @@ package com.kroger.example;
 
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestMapping;
-
 import javax.servlet.http.HttpServletResponse;
-//import javax.servlet.http;
 
 @RestController
 public class HelloController {
+	// Should trigger passwords in SonarQube
 	private String password="SuperSpecialAisle7";
 	private String token="TheF5KeyIsSoRefreshing";
+	// Should trigger Github PAT in Github Advanced Security - Secret Scanning
 	private String pat_token="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";
 
 	@RequestMapping("/")
@@ -21,6 +21,19 @@ public class HelloController {
 	// Should trigger: (don't have url) Unnecessary toString()
 	@RequestMapping("/hello")
 	public String helloWorld(HttpServletResponse response) throws Exception  {
+		try {
+			String temp = "blah";
+			System.out.println(temp.toString());
+		} catch (NullPointerException ex) {
+			ex.printStackTrace(response.getWriter());
+		}
+
+		return "Hello world";
+	}
+
+	// Should trigger duplicate code
+	@RequestMapping("/goodbye")
+	public String goodbyeWorld(HttpServletResponse response) throws Exception  {
 		try {
 			String temp = "blah";
 			System.out.println(temp.toString());
