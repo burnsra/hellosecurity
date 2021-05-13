@@ -6,6 +6,7 @@ on:
     - '**/pom.xml'
     - 'Dockerfile*'
     - '.github/workflows/ci.yml'
+    - '.github/workflows/security-ci.yml'
     - '.github/workflows/xray.yml'
     - '.github/workflows/release-deploy.yml'
     - '.github/workflows/review*.yml'
