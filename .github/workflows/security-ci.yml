@@ -1,4 +1,4 @@
-name: Xray continuous integration
+name: Security CI
 on: 
   push:
     paths:
