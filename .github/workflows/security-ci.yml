@@ -1,4 +1,4 @@
-name: Xray continuous integration
+name: Security CI
 on: 
   push:
     paths:
@@ -6,6 +6,7 @@ on:
     - '**/pom.xml'
     - 'Dockerfile*'
     - '.github/workflows/ci.yml'
+    - '.github/workflows/security-ci.yml'
     - '.github/workflows/xray.yml'
     - '.github/workflows/release-deploy.yml'
     - '.github/workflows/review*.yml'
@@ -51,18 +52,26 @@ jobs:
       uses: andstor/file-existence-action@v1
       with:
         files: "sonar-project.properties"
-    - name: ✅ Warn If Missing Config
+    - name: 🔔 Warn If Missing Config
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
       run: "echo '::warning:: Please add sonar-project.properties. Details can be found at https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/'"
     - name: 🔍 Run SonarQube Scan
+      id: sonarscan
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'true'
       uses: ./.github/actions/sonar-scanner
+      continue-on-error: true
       with:
         sonar-token: ${{ secrets.SONAR_TOKEN }}
-    - name: 🔔 Notify Developer of SonarQube Report
+    - name: 🔔 Notify Developer of SonarQube Report (success)
+      if: steps.sonarscan.outcome == 'success'
       run:  |
         reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
-        echo "::warning:: Your results are complete. How did you do? Find your results at http://sonar.kroger.com/sonar/dashboard/index$reponame"
+        echo "::warning:: Your SonarQube scan is complete. How did you do? Find your results at http://sonar.kroger.com/sonar/dashboard/index$reponame"
+    - name: 🔔 Notify Developer of SonarQube Report (failure)
+      if: steps.sonarscan.outcome != 'success'
+      run:  |
+        reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
+        echo "::error:: It seems you have not passed your SonarQube quality gate. Details can be found at http://sonar.kroger.com/sonar/dashboard/index$reponame"
       
   build:
     name: docker build, scan, and push
@@ -112,17 +121,21 @@ jobs:
         echo "buildnumber=$buildnumber" >> $GITHUB_ENV
 
     - name: 🐸 XRay Scan 
+      # It is assumed that the delay here is only due to xray issues in production, causing the CLI to wait for a response indefinitely. 
+      # I do not believe the scans should be taking 10 minutes to complete but needs to be verified. JFrog claims these scans should be "instant".
       timeout-minutes: 10
       continue-on-error: true
+      id: xrayscan
       run: |
         jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
         jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=false
         
     - name: 🔔 Notify Developer of XRay Report
-      run:  |
+      # This should be changed to pass/fail messages once everything is in order
+      run: |
         reponame=$(echo ${{github.REPOSITORY}} | sed 's/\//%2F/')
-        echo "::warning:: Your results are complete. How did you do? Find your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
-        
+        echo "::warning:: Your XRay security scan has been initiated. Find your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
+      
   deploy:
     name: continuous deploy 
     if: false
@@ -192,5 +205,3 @@ jobs:
         environment_url: ${{ steps.deploy.outputs.webapp-url }}
         state: failure
         deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
-        
-
