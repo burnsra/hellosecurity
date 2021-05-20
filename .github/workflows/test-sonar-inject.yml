@@ -1,0 +1,46 @@
+name: Inject Sonar Configs
+on: 
+  workflow_dispatch:
+
+env:
+  PROP_FILE_NAME: sonar-project.test
+#   PROP_FILE_NAME: sonar-project.properties
+  
+jobs:
+  config:
+    name: Inject Sonar Default Config
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - name: ✅ Verify SonarQube Config Exists
+        id: sonarPropertiesCheck
+        uses: andstor/file-existence-action@v1
+        with:
+          files: ${{ env.PROP_FILE_NAME }}
+      - name: 🔔 Add missing config
+        if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
+        run: |
+          reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
+          cat << EOF > ${{ env.PROP_FILE_NAME }}
+          # must be unique in a given SonarQube instance
+          sonar.projectKey=$reponame
+
+          # --- optional properties ---
+
+          # defaults to project key
+          # sonar.projectName=[friendly project name here]
+          # defaults to 'not provided'
+          # sonar.projectVersion=1.0
+
+          # Path is relative to the sonar-project.properties file. Defaults to .
+          # sonar.sources=src
+          # sonar.java.binaries=target
+
+          # Encoding of the source code. Default is default system encoding
+          #sonar.sourceEncoding=UTF-8
+          EOF
+          
+      - name: Commit changes
+        uses: EndBug/add-and-commit@v7
+        with: 
+          message: 'Added default ${{ env.PROP_FILE_NAME }}'
