@@ -3,8 +3,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROP_FILE_NAME: sonar-project.test2
-#   PROP_FILE_NAME: sonar-project.properties
+  PROP_FILE_NAME: sonar-project.properties
   
 jobs:
   config:
@@ -50,5 +49,6 @@ jobs:
           
       - name: Commit changes
         uses: EndBug/add-and-commit@v7
+        if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
         with: 
           message: 'Added default ${{ env.PROP_FILE_NAME }}'
