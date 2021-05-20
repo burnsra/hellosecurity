@@ -22,21 +22,29 @@ jobs:
         run: |
           reponame=$(echo ${{github.REPOSITORY}} | sed -e 's/${{github.repository_owner}}//' -e 's/\///')
           cat << EOF > ${{ env.PROP_FILE_NAME }}
+          # -- required configuration --
           # must be unique in a given SonarQube instance
           sonar.projectKey=$reponame
 
-          # --- optional properties ---
-
-          # defaults to project key
-          # sonar.projectName=[friendly project name here]
-          # defaults to 'not provided'
-          # sonar.projectVersion=1.0
-
+          # -- language specific configuration --
           # Path is relative to the sonar-project.properties file. Defaults to .
+          # Configure this as needed for your language:
+          # https://docs.sonarqube.org/latest/analysis/languages/overview/
+          # in this example, code is located under src directory and compiled into target directory
           # sonar.sources=src
           # sonar.java.binaries=target
 
-          # Encoding of the source code. Default is default system encoding
+          # --- optional properties ---
+          # More configuration options can be found here:
+          # https://docs.sonarqube.org/latest/analysis/analysis-parameters/
+
+          # Friendly Naming - defaults to project key
+          # sonar.projectName=[friendly project name here]
+
+          # Project Version - defaults to 'not provided'
+          # sonar.projectVersion=1.0
+
+          # Project Encoding - defaults to default system encoding
           #sonar.sourceEncoding=UTF-8
           EOF
           

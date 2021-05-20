@@ -54,7 +54,10 @@ jobs:
         files: "sonar-project.properties"
     - name: 🔔 Warn If Missing Config
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
-      run: "echo '::warning:: Please add sonar-project.properties. Details can be found at https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/'"
+      run: |
+        echo "::warning:: You are missing a required file: sonar-project.properties
+          You can add this automatically by executing the workflow: Inject Sonar Default Config
+          More details can be found at https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/"
     - name: 🔍 Run SonarQube Scan
       id: sonarscan
       if: steps.sonarPropertiesCheck.outputs.files_exists == 'true'
