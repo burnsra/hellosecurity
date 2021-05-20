@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROP_FILE_NAME: sonar-project.test
+  PROP_FILE_NAME: sonar-project.test2
 #   PROP_FILE_NAME: sonar-project.properties
   
 jobs:
@@ -20,7 +20,7 @@ jobs:
       - name: 🔔 Add missing config
         if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
         run: |
-          reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
+          reponame=$(echo ${{github.REPOSITORY}} | sed -e 's/${{github.repository_owner}}//' -e 's/\///')
           cat << EOF > ${{ env.PROP_FILE_NAME }}
           # must be unique in a given SonarQube instance
           sonar.projectKey=$reponame
