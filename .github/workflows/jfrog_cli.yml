@@ -47,7 +47,7 @@ jobs:
     - name: 🐸 Configure JFrog CLI  
       run: |
         jfrog config add --url=${{ env.JFROG_SAAS_URL }} --user=${{secrets.DOCKER_USERNAME}} --password='${{secrets.DOCKER_PASSWORD}}' --interactive=false artsaas
-        jfrog rt mvnc --repo-resolve-releases=libs-release --server-id-resolve=artsaas
+        jfrog rt mvnc --repo-resolve-releases=libs-release --repo-resolve-snapshot=libs-snapshot --repo-deploy-snapshot=kroger-fast-track-local --repo-deploy-releases=kroger-fast-track-local --server-id-resolve=artsaas --server-id-deploy=artsaas
     
     - name: 🐸 Maven Build
       run: |
