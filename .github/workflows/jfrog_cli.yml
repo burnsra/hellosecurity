@@ -1,0 +1,208 @@
+name: Security CI
+on: 
+  push:
+    paths:
+    - 'src/**'
+    - '**/pom.xml'
+    - 'Dockerfile*'
+    - '.github/workflows/ci.yml'
+    - '.github/workflows/security-ci.yml'
+    - '.github/workflows/xray.yml'
+    - '.github/workflows/release-deploy.yml'
+    - '.github/workflows/review*.yml'
+    - '.github/workflows/version.yml'
+    - '.github/containerscan/allowedlist.yaml'
+    - 'sonar-project.properties'
+
+env:
+  APP_NAME: ${{ github.event.repository.name }}
+  DOCKER_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
+  DOCKER_TEST_REGISTRY: krogertechnology-kroger-fast-track-docker-local.jfrog.io
+  DOCKER_REGISTRY_REMOTE: krogertechnology-docker.jfrog.io
+  DOCKER_REPOSITORY: ${{ github.event.repository.name }}/webapp
+  RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
+  JFROG_SAAS_URL: https://krogertechnology.jfrog.io
+  REPO: kroger-fast-track-docker-local
+
+jobs:
+  test:
+    name: maven test, sonar scan
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/checkout@v2
+      with:
+        repository: krogertechnology/sonar-scanner
+        path: .github/actions/sonar-scanner
+        ref: v1
+        token: ${{ secrets.SONAR_SCANNER_CHECKOUT_TOKEN }}
+    - name: Set up JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Cache Maven dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+    - name: ✅ Run Unit Test
+      run: mvn -B clean test
+    - name: ✅ Verify SonarQube Config Exists
+      id: sonarPropertiesCheck
+      uses: andstor/file-existence-action@v1
+      with:
+        files: "sonar-project.properties"
+    - name: 🔔 Warn If Missing Config
+      if: steps.sonarPropertiesCheck.outputs.files_exists == 'false'
+      run: |
+        echo "::warning:: You are missing a required file: sonar-project.properties
+          You can add this automatically by executing the workflow: Inject Sonar Default Config
+          More details can be found at https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/"
+    - name: 🔍 Run SonarQube Scan
+      id: sonarscan
+      if: steps.sonarPropertiesCheck.outputs.files_exists == 'true'
+      uses: ./.github/actions/sonar-scanner
+      continue-on-error: true
+      with:
+        sonar-token: ${{ secrets.SONAR_TOKEN }}
+    - name: 🔔 Notify Developer of SonarQube Report (success)
+      if: steps.sonarscan.outcome == 'success'
+      run:  |
+        reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
+        echo "::warning:: Your SonarQube scan is complete. How did you do? Find your results at http://sonar.kroger.com/sonar/dashboard/index$reponame"
+    - name: 🔔 Notify Developer of SonarQube Report (failure)
+      if: steps.sonarscan.outcome != 'success'
+      run:  |
+        reponame=$(echo ${{github.REPOSITORY}} | sed 's/${{github.repository_owner}}//')
+        echo "::error:: It seems you have not passed your SonarQube quality gate. Details can be found at http://sonar.kroger.com/sonar/dashboard/index$reponame"
+      
+  build:
+    name: docker build, scan, and push
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Inject slug/short variables
+      uses: rlespinasse/github-slug-action@v3.x 
+      
+    - name: 🐳 Docker Login - Registry
+      uses: docker/login-action@v1
+      with: 
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: 🐳 Docker Login - Remote Registry
+      uses: docker/login-action@v1
+      with: 
+        registry: ${{ env.DOCKER_REGISTRY_REMOTE }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: 🐸 Install JFrog CLI   
+      uses: jfrog/setup-jfrog-cli@v1
+      
+    - name: 🐸 Configure JFrog CLI  
+      run: |
+        jfrog config add --url=${{ env.JFROG_SAAS_URL }} --user=${{secrets.DOCKER_USERNAME}} --password='${{secrets.DOCKER_PASSWORD}}' --interactive=false
+        
+    - name: 🐳 Docker Build
+      run: |
+        docker build . --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} \
+          --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:latest \
+          --tag ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+    - name: 🔍 Azure Container Scan 🔒
+      uses: azure/container-scan@v0
+      continue-on-error: true
+      with:
+        image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
+
+    - name: 🐳 Docker Push
+      run: |
+        buildnumber="${{github.run_id}}-$RANDOM"
+        jfrog rt docker-push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} ${{env.REPO}} --build-name=${{github.repository}} --build-number=$buildnumber
+        echo "buildnumber=$buildnumber" >> $GITHUB_ENV
+    - name: 🐸 XRay Scan 
+      # It is assumed that the delay here is only due to xray issues in production, causing the CLI to wait for a response indefinitely. 
+      # I do not believe the scans should be taking 10 minutes to complete but needs to be verified. JFrog claims these scans should be "instant".
+      timeout-minutes: 10
+      continue-on-error: true
+      id: xrayscan
+      run: |
+        jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
+        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=false
+        
+    - name: 🔔 Notify Developer of XRay Report
+      # This should be changed to pass/fail messages once everything is in order
+      run: |
+        reponame=$(echo ${{github.REPOSITORY}} | sed 's/\//%2F/')
+        echo "::warning:: Your XRay security scan has been initiated. Find your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
+      
+  deploy:
+    name: continuous deploy 
+    if: false
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🔄 Set environment name variable (branch)
+      if: github.ref != 'refs/heads/main'
+      run: |
+          echo ::set-env name=ENVIRONMENT_NAME::dev
+          echo ::set-env name=SLOT_NAME::dev
+    - name: 🔄 Set environment name variable (main)
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tag')
+      run: |
+          echo ::set-env name=ENVIRONMENT_NAME::test
+          echo ::set-env name=SLOT_NAME::production
+    - id: create-deployment
+      uses: mormahr/deployment-action@transient_and_production_environment
+      name: 🔄 Create continuous deployment
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: ${{ github.sha }}
+        description: ${{ env.ENVIRONMENT_NAME }} deploy of @${{ github.sha }} with image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+        environment: ${{ env.ENVIRONMENT_NAME }}
+        initial_status: in_progress
+    - name: 🔄 Login via Azure CLI ☁️
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_AZURE_CREDENTIALS }}
+    - name: 🔄 Create slot ☁️
+      if: env.SLOT_NAME != 'production'
+      run: az webapp deployment slot create --name ${{ env.APP_NAME }}-nonprod --slot ${{ env.SLOT_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }} --configuration-source ${{ env.APP_NAME }}-nonprod || true
+    - name: 🐳 Promote Docker image for deploy
+      uses: timperman/artifactory-promote-action@v1
+      with:
+        url: https://krogertechnologyprodusw.jfrog.io
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        sourceRepo: docker-local-dev
+        targetRepo: docker-local-test
+        dockerRepository: ${{ env.DOCKER_REPOSITORY }}
+        tag: ${{ github.sha }}
+        targetTag: ${{ github.sha }}
+    - id: deploy
+      name: 🔄 Deploy to App Service ☁️
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.APP_NAME }}-nonprod
+        images: ${{ env.DOCKER_TEST_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+        slot-name: ${{ env.ENVIRONMENT_NAME }}
+    - name: 🔄 Update deployment status (success)
+      if: success()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: success
+        deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
+        description: ${{ env.DOCKER_TEST_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+    - name: 🔄 Update deployment status (failure)
+      if: failure()
+      uses: chrnorm/deployment-status@releases/v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target_url: ${{ steps.deploy.outputs.webapp-url }}
+        environment_url: ${{ steps.deploy.outputs.webapp-url }}
+        state: failure
+        deployment_id: ${{ steps.create-deployment.outputs.deployment_id }}
