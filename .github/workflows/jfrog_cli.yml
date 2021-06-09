@@ -41,9 +41,6 @@ jobs:
       with:
         path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-    - name: Set M2_HOME ENV Variable
-      run: |
-          export M2_HOME=~/.m2
     - name: 🐸 Install JFrog CLI   
       uses: jfrog/setup-jfrog-cli@v1
       
@@ -53,6 +50,8 @@ jobs:
         jfrog rt mvnc --repo-resolve-releases=libs-release --repo-resolve-snapshots=libs-snapshot --repo-deploy-snapshots=kroger-fast-track-local --repo-deploy-releases=kroger-fast-track-local --server-id-resolve=artsaas --server-id-deploy=artsaas
     
     - name: 🐸 Maven Build
+      env:
+        M2_HOME: ~/.m2
       run: |
         buildnumber="${{github.run_id}}-$RANDOM"
         jfrog rt mvn --build-name=${{github.repository}} --build-number=$buildnumber clean install -B
