@@ -108,7 +108,7 @@ jobs:
   deploy:
     name: continuous deploy 
     if: false
-    needs: [test, build]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
     - name: 🔄 Set environment name variable (branch)
