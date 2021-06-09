@@ -53,11 +53,7 @@ jobs:
         JFROG_CLI_EXTRACTORS_REMOTE: artsaas/extractors
         M2_HOME: ~/.m2
       run: |
-        curpath=$PWD 
-        cd $M2_HOME/boot
-        ls -la
-        rm ./plexus-classworlds.license
-        cd $curpath
+        ls -la $M2_HOME
         buildnumber="${{github.run_id}}-$RANDOM"
         jfrog rt mvn --build-name=${{github.repository}} --build-number=$buildnumber clean install -B
         
