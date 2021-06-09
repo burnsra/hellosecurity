@@ -24,7 +24,6 @@ env:
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
   JFROG_SAAS_URL: https://krogertechnology.jfrog.io
   REPO: kroger-fast-track-docker-local
-  JFROG_CLI_EXTRACTORS_REMOTE: artsaas/extractors
 
 jobs:
   maven-build:
@@ -51,6 +50,7 @@ jobs:
     
     - name: 🐸 Maven Build
       env:
+        JFROG_CLI_EXTRACTORS_REMOTE: artsaas/extractors
         M2_HOME: ~/.m2
       run: |
         buildnumber="${{github.run_id}}-$RANDOM"
