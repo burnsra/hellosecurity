@@ -41,7 +41,8 @@ jobs:
       with:
         path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-        run: |
+    - name: Set M2_HOME ENV Variable
+      run: |
           export M2_HOME=~/.m2
     - name: 🐸 Install JFrog CLI   
       uses: jfrog/setup-jfrog-cli@v1
