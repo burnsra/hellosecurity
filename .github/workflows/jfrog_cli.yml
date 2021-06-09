@@ -24,7 +24,6 @@ env:
   RESOURCE_GROUP_NAME: ${{ secrets.BUILDING_BLOCKS_CENTRALUS_NONPROD_RESOURCE_GROUP }}
   JFROG_SAAS_URL: https://krogertechnology.jfrog.io
   REPO: kroger-fast-track-docker-local
-  M2_HOME: ~/.m2
   JFROG_CLI_EXTRACTORS_REMOTE: artsaas/extractors
 
 jobs:
@@ -42,6 +41,8 @@ jobs:
       with:
         path: ~/.m2
         key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        run: |
+          export M2_HOME=~/.m2
     - name: 🐸 Install JFrog CLI   
       uses: jfrog/setup-jfrog-cli@v1
       
