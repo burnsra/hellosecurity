@@ -77,7 +77,7 @@
                                      <username>{{JFROG_USERNAME}}</username>
                                      <password>{{JFROG_PASSWORD}}</password>
                                      <repoKey>kroger-fast-track-local</repoKey>
-                                     <snapshotRepoKey>kroger-fast-track-local</snapshotRepoKey>
+                                     <snapshotRepoKey>kroger-software-engr-snap</snapshotRepoKey>
                                  </publisher>
                              </configuration>
                          </execution>
