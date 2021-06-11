@@ -45,17 +45,44 @@
     </dependencies>
 
     <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <layers>
-                        <enabled>true</enabled>
-                    </layers>
-                </configuration>
-            </plugin>
-        </plugins>
+         <plugins>
+         <plugin>
+                  <groupId>org.springframework.boot</groupId>
+                  <artifactId>spring-boot-maven-plugin</artifactId>
+                  <configuration>
+                  <layers>
+                           <enabled>true</enabled>
+                  </layers>
+                  </configuration>
+         </plugin>
+                  <plugin>
+                     <groupId>org.jfrog.buildinfo</groupId>
+                     <artifactId>artifactory-maven-plugin</artifactId>
+                     <version>3.2.3</version>
+                     <inherited>false</inherited>
+                     <executions>
+                         <execution>
+                             <id>build-info</id>
+                             <goals>
+                                 <goal>publish</goal>
+                             </goals>
+                             <configuration>
+                                 <deployProperties>
+                                    <groupId>${project.groupId}</groupId>
+                                    <artifactId>${project.artifactId}</artifactId>
+                                    <version>${project.version}</version>
+                                 </deployProperties>
+                                 <publisher>
+                                     <contextUrl>{{JFROG_SAAS_URL}}</contextUrl>
+                                     <username>{{JFROG_USERNAME}}</username>
+                                     <password>{{JFROG_PASSWORD}}</password>
+                                     <repoKey>kroger-fast-track-local</repoKey>
+                                     <snapshotRepoKey>libs-snapshot-local</snapshotRepoKey>
+                                 </publisher>
+                             </configuration>
+                         </execution>
+                     </executions>
+                  </plugin>
+         </plugins>
     </build>
-
 </project>
