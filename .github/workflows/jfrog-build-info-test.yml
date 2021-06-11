@@ -1,9 +1,11 @@
 name: JFROG Build Info Test
+
 # The purpose of this workflow is to compare the build info we get from different sources
-#  * a user who strictly uses maven, is not dockerized and does not know about the jfrog cli
+#  * a user who strictly uses maven, is not containerized, and does not know about the jfrog cli
 #  * a user who builds with any method and pushes via api calls
 #  * a user who builds and deploys using strictly docker commands
 #  * a user who deploys using jfrog cli
+
 on: 
   workflow_dispatch: 
   push:
