@@ -40,7 +40,7 @@ jobs:
     - name: Run Deploy
       env:
         JFROG_SAAS_URL: ${{ env.JFROG_SAAS_URL }}/artifactory
-        JFROG_USER: ${{ secrets.DOCKER_USERNAME }}
+        JFROG_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         JFROG_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       run: mvn -B deploy
     
