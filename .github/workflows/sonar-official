@@ -1,3 +1,7 @@
+name: Sonar Official
+# https://github.com/marketplace/actions/official-sonarqube-scan
+# https://docs.sonarqube.org/latest/analysis/github-integration/
+
 on:
   workflow_dispatch: 
 
