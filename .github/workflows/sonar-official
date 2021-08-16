@@ -2,7 +2,7 @@ on:
   workflow_dispatch: 
 
 env:
-  SONAR_HOST_URL: http://sonar.kroger.com/sonar
+  SONAR_HOST_URL: http://sonar-test.kroger.com/sonar
 
 name: Main Workflow
 jobs:
@@ -15,6 +15,10 @@ jobs:
         fetch-depth: 0
     - name: SonarQube Scan
       uses: sonarsource/sonarqube-scan-action@master
+      continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+      with:
+        args: >
+          -Dsonar.verbose=true
