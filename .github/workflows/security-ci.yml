@@ -117,27 +117,13 @@ jobs:
       with:
         image-name: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ env.GITHUB_REF_SLUG }}
 
-    - name: 🐳 Docker Push
-      run: |
-        buildnumber="${{github.run_id}}-$RANDOM"
-        jfrog rt docker-push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }} ${{env.REPO}} --build-name=${{github.repository}} --build-number=$buildnumber
-        echo "buildnumber=$buildnumber" >> $GITHUB_ENV
-
-    - name: 🐸 XRay Scan 
-      # It is assumed that the delay here is only due to xray issues in production, causing the CLI to wait for a response indefinitely. 
-      # I do not believe the scans should be taking 10 minutes to complete but needs to be verified. JFrog claims these scans should be "instant".
-      timeout-minutes: 10
-      continue-on-error: true
-      id: xrayscan
-      run: |
-        jfrog rt build-publish ${{github.repository}} ${{env.buildnumber}}
-        jfrog rt build-scan ${{github.repository}} ${{env.buildnumber}} --fail=false
-        
-    - name: 🔔 Notify Developer of XRay Report
-      # This should be changed to pass/fail messages once everything is in order
-      run: |
-        reponame=$(echo ${{github.REPOSITORY}} | sed 's/\//%2F/')
-        echo "::warning:: Your XRay security scan has been initiated. Find your results at https://krogertechnology.jfrog.io/ui/builds/$reponame/$buildnumber"
+    - name: 🐸🐳 Push to jfrog Artifactory
+      uses: ./.github/actions/jfrog-docker-push
+      with:
+        images: |
+          ${{ env.DOCKER_DEV_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+        repo: docker-dev
+        server-id: artifactory
       
   deploy:
     name: continuous deploy 
