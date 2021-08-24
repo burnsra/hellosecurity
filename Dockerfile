@@ -1,19 +1,17 @@
-ARG baseRegistry=krogertechnology-docker.jfrog.io
-FROM maven:3.6.3-openjdk-8 AS builder
-WORKDIR /app
-COPY pom.xml ./pom.xml
-COPY src ./src
-RUN mvn clean package \
- && java -Djarmode=layertools -jar target/*.jar extract
+FROM docker-remote.registry.kroger.com/maven:3.6.3-openjdk-8 as build
+ARG CUSTOM_MVN_SETTINGS=https://artifactory.kroger.com/artifactory/kroger-alm/maven/config/settings.xml
+ENV MAVEN_OPTS="-Xmx2g -Xss128M -XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=1024M -XX:+CMSClassUnloadingEnabled"
+ENV JAVA_OPTS="-XX:+UseG1GC -Xms1g -Xmx2g -XX:+UseParallelGC -XX:+UseStringDeduplication -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/opt/tmp/heapdump.bin"
+ADD ${CUSTOM_MVN_SETTINGS} /usr/share/maven/conf/settings.xml
+RUN mkdir -p /
+COPY [".","/"]
+WORKDIR /
+RUN mvn clean package
 
-FROM ${baseRegistry}/library/java-openjre:8-latest
-LABEL org.opencontainers.image.vendor "Kroger Technology" \
-  org.opencontainers.image.licenses ""
+FROM docker-prod.registry.kroger.com/library/java-openjre:8-latest
+ARG JAR_FILE=./*-server/target/*.jar
+COPY --from=build ${JAR_FILE} ./app.jar
+ENV JAVA_OPTS="-XX:+UseG1GC -Xms1g -Xmx1g -XX:+UseStringDeduplication -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/opt/tmp/heapdump.bin"
+ENV SPRING_PROFILES_ACTIVE="local"
 EXPOSE 8080
-WORKDIR /app
-COPY --from=builder /app/dependencies/ ./
-COPY --from=builder /app/snapshot-dependencies/ ./
-RUN true
-COPY --from=builder /app/spring-boot-loader/ ./
-COPY --from=builder /app/application/ ./
-ENTRYPOINT ["java", "org.springframework.boot.loader.JarLauncher"]
+CMD ["java", "-jar", "/app.jar"]
