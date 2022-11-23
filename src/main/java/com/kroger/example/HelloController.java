@@ -28,7 +28,8 @@ public class HelloController {
 			String temp = "blah";
 			System.out.println(temp.toString());
 		} catch (NullPointerException ex) {
-			ex.printStackTrace(response.getWriter());
+			// deepcode ignore ServerInformationExposure: Code Ignore
+   ex.printStackTrace(response.getWriter());
 		}
 
 		return "Hello world";
