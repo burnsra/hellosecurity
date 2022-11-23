@@ -8,8 +8,8 @@ ignore:
         expires: 2022-12-17T17:04:22.102Z
         created: 2022-11-17T17:04:22.106Z
   SNYK-JAVA-COMFASTERXMLJACKSONCORE-2421244:
-    - '*':
-        reason: None Given
+    - 'pom.xml':
+        reason: Example Reason
         expires: 2022-12-18T19:13:10.027Z
         created: 2022-11-18T19:13:10.036Z
 patch: {}
