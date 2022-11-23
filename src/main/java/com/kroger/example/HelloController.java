@@ -7,7 +7,8 @@ import javax.servlet.http.HttpServletResponse;
 @RestController
 public class HelloController {
 	// Should trigger passwords in SonarQube
-	private String password="SuperSpecialAisle7";
+	// deepcode ignore NonCryptoHardcodedSecret: Code Ignore
+ private String password="SuperSpecialAisle7";
 	String pwd="TheF5KeyIsSoRefreshing";
 	// Should trigger Github PAT in Github Advanced Security - Secret Scanning
 	private String pat_token="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";
